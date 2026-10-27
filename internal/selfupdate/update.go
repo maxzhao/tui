@@ -35,7 +35,7 @@ func Detect(executable string, info *debug.BuildInfo) Installation {
 	case strings.HasPrefix(path, "/nix/store/") || strings.HasPrefix(path, "/snap/") || strings.HasPrefix(path, "/usr/bin/"):
 		i.Owner, i.Instruction = "package-manager", "Update zn with the package manager that installed it."
 	case goInstalled(info):
-		i.Owner, i.Instruction = "go", "go install github.com/ZenNotes/tui/cmd/zn@latest"
+		i.Owner, i.Instruction = "go", "Install a checksum-verified maxzhao/tui fork release as a standalone binary"
 	}
 	return i
 }
@@ -95,32 +95,11 @@ func Update(ctx context.Context, current, version string, check bool, output io.
 	if current == release.Version() || (version == "" || version == "latest") && !result.UpdateAvailable {
 		return result, nil
 	}
-	if i.Owner == "homebrew" {
-		if version != "" && version != "latest" {
-			return result, fmt.Errorf("Homebrew owns this installation and selects its packaged version; run `brew upgrade zn`")
-		}
-		cmd := exec.CommandContext(ctx, "brew", "upgrade", "zn")
-		cmd.Stdout, cmd.Stderr = output, output
-		if err := cmd.Run(); err != nil {
-			return result, err
-		}
-		// Homebrew's versioned cellar path changes; use its stable opt path.
-		parts := strings.Split(filepath.ToSlash(i.Executable), "/Cellar/zn/")
-		if len(parts) != 2 {
-			return result, fmt.Errorf("verify the upgraded version with `zn --version`")
-		}
-		err = probe(ctx, filepath.Join(parts[0], "opt", "zn", "bin", "zn"), release.Version())
-	} else if i.Owner == "go" {
-		cmd := exec.CommandContext(ctx, "go", "install", "github.com/ZenNotes/tui/cmd/zn@v"+release.Version())
-		cmd.Env = os.Environ()
-		cmd.Env = append(cmd.Env, "GOBIN="+filepath.Dir(i.Executable))
-		cmd.Stdout, cmd.Stderr = output, output
-		if err = cmd.Run(); err == nil {
-			err = probe(ctx, i.Executable, release.Version())
-		}
+	if i.Owner == "homebrew" || i.Owner == "go" {
+		return result, fmt.Errorf("%s owns this installation; install a checksum-verified maxzhao/tui standalone release before self-update", i.Owner)
 	} else {
 		if runtime.GOOS == "windows" {
-			return result, fmt.Errorf("download %s and replace zn.exe after exiting: https://github.com/ZenNotes/tui/releases/tag/%s", release.Version(), release.Tag)
+			return result, fmt.Errorf("download %s and replace zn.exe after exiting: https://github.com/maxzhao/tui/releases/tag/%s", release.Version(), release.Tag)
 		}
 		if _, err := releases.NormalizeVersion(current); err != nil {
 			return result, fmt.Errorf("this is a development build; install a published release before using native self-update")

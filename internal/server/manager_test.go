@@ -18,7 +18,7 @@ type fixtureReleases struct{}
 
 func (fixtureReleases) Lookup(_ context.Context, _ releases.Product, version string) (releases.Release, error) {
 	if version == "" || version == "latest" {
-		version = "2.56.0"
+		version = "2.56.0-maxa.1"
 	}
 	return releases.Release{Tag: "v" + version}, nil
 }
@@ -121,7 +121,7 @@ func TestUnhealthyUpgradeRestoresWorkingServerAndToken(t *testing.T) {
 	m.Service = driver
 	m.HealthTimeout = time.Millisecond
 	m.Check = func(_ context.Context, i Instance) error {
-		if i.Version == "2.57.0" {
+		if i.Version == "2.57.0-maxa.1" {
 			return errors.New("candidate is unhealthy")
 		}
 		return nil
@@ -131,11 +131,11 @@ func TestUnhealthyUpgradeRestoresWorkingServerAndToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	token, _ := os.ReadFile(m.TokenPath(i.Name))
-	if _, err := m.Update(context.Background(), i.Name, "2.57.0"); err == nil {
+	if _, err := m.Update(context.Background(), i.Name, "2.57.0-maxa.1"); err == nil {
 		t.Fatal("unhealthy update succeeded")
 	}
 	got, err := m.Load(i.Name)
-	if err != nil || got.Version != "2.56.0" || !driver.active || driver.spec.Executable != m.BinaryPath(i) {
+	if err != nil || got.Version != "2.56.0-maxa.1" || !driver.active || driver.spec.Executable != m.BinaryPath(i) {
 		t.Fatalf("rollback did not restore the old service: %+v %+v %v", got, driver, err)
 	}
 	after, _ := os.ReadFile(m.TokenPath(i.Name))
@@ -143,12 +143,12 @@ func TestUnhealthyUpgradeRestoresWorkingServerAndToken(t *testing.T) {
 		t.Fatal("upgrade changed credentials")
 	}
 	m.Check = func(context.Context, Instance) error { return nil }
-	updated, err := m.Update(context.Background(), i.Name, "2.57.0")
-	if err != nil || updated.Version != "2.57.0" || updated.PreviousVersion != "2.56.0" {
+	updated, err := m.Update(context.Background(), i.Name, "2.57.0-maxa.1")
+	if err != nil || updated.Version != "2.57.0-maxa.1" || updated.PreviousVersion != "2.56.0-maxa.1" {
 		t.Fatalf("healthy update: %+v %v", updated, err)
 	}
 	restored, err := m.Rollback(context.Background(), i.Name)
-	if err != nil || restored.Version != "2.56.0" || restored.PreviousVersion != "2.57.0" {
+	if err != nil || restored.Version != "2.56.0-maxa.1" || restored.PreviousVersion != "2.57.0-maxa.1" {
 		t.Fatalf("explicit rollback: %+v %v", restored, err)
 	}
 }

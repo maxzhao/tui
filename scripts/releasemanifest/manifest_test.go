@@ -121,7 +121,7 @@ func TestBuildWritesSignedManifest(t *testing.T) {
 	if err := json.Unmarshal(data, &m); err != nil {
 		t.Fatal(err)
 	}
-	if m.SchemaVersion != 1 || m.Release.Repository != "ZenNotes/tui" || m.Release.Protocol != 1 || m.Release.Version != testVersion || m.Release.Commit != strings.ToLower(testCommit) {
+	if m.SchemaVersion != 1 || m.Release.Repository != "maxzhao/tui" || m.Release.Protocol != 1 || m.Release.Version != testVersion || m.Release.Commit != strings.ToLower(testCommit) {
 		t.Fatalf("manifest header wrong: %+v", m)
 	}
 	if len(m.Release.Artifacts) != len(targets) {
@@ -130,7 +130,7 @@ func TestBuildWritesSignedManifest(t *testing.T) {
 	for _, target := range targets {
 		name := fmt.Sprintf("zn_%s_%s_%s.tar.gz", testVersion, target.goos, target.goarch)
 		hash, _ := fileSHA256(filepath.Join(dist, name))
-		want := Artifact{URL: "https://github.com/ZenNotes/tui/releases/download/v0.6.2/" + name, SHA256: hash}
+		want := Artifact{URL: "https://github.com/maxzhao/tui/releases/download/v0.6.2/" + name, SHA256: hash}
 		if got := m.Release.Artifacts[target.key]; got != want {
 			t.Errorf("%s: got %+v, want %+v", target.key, got, want)
 		}
@@ -345,25 +345,25 @@ func TestManifestMatchesDesktopPinBytes(t *testing.T) {
 	const want = `{
   "schemaVersion": 1,
   "release": {
-    "repository": "ZenNotes/tui",
+    "repository": "maxzhao/tui",
     "protocol": 1,
     "version": "0.6.1",
     "commit": "4c4038e7a0ff204868729f64c3e372e54fb50307",
     "artifacts": {
       "darwin-arm64": {
-        "url": "https://github.com/ZenNotes/tui/releases/download/v0.6.1/zn_0.6.1_darwin_arm64.tar.gz",
+        "url": "https://github.com/maxzhao/tui/releases/download/v0.6.1/zn_0.6.1_darwin_arm64.tar.gz",
         "sha256": "7223eea660a270cf01d2e1015940c131014b8497d0db6b24a0acbb9c546263d7"
       },
       "darwin-x64": {
-        "url": "https://github.com/ZenNotes/tui/releases/download/v0.6.1/zn_0.6.1_darwin_amd64.tar.gz",
+        "url": "https://github.com/maxzhao/tui/releases/download/v0.6.1/zn_0.6.1_darwin_amd64.tar.gz",
         "sha256": "8f3b3190b243d18e84f45a8c4b03eff9c9fa63ea3f815df7a757d674a1f8c652"
       },
       "linux-arm64": {
-        "url": "https://github.com/ZenNotes/tui/releases/download/v0.6.1/zn_0.6.1_linux_arm64.tar.gz",
+        "url": "https://github.com/maxzhao/tui/releases/download/v0.6.1/zn_0.6.1_linux_arm64.tar.gz",
         "sha256": "f17202e930ac2916cee113d0c7dcacc5bfcbf04db601306a13cc8f757b7c576a"
       },
       "linux-x64": {
-        "url": "https://github.com/ZenNotes/tui/releases/download/v0.6.1/zn_0.6.1_linux_amd64.tar.gz",
+        "url": "https://github.com/maxzhao/tui/releases/download/v0.6.1/zn_0.6.1_linux_amd64.tar.gz",
         "sha256": "9b082f58c2db052f44ede345539491f07578745971c847471e5cf1b1786ed256"
       }
     }
@@ -381,7 +381,7 @@ func TestManifestMatchesDesktopPinBytes(t *testing.T) {
 	for i := len(targets) - 1; i >= 0; i-- {
 		target := targets[i]
 		m.Release.Artifacts[target.key] = Artifact{
-			URL:    fmt.Sprintf("https://github.com/ZenNotes/tui/releases/download/v0.6.1/zn_0.6.1_%s_%s.tar.gz", target.goos, target.goarch),
+			URL:    fmt.Sprintf("https://github.com/maxzhao/tui/releases/download/v0.6.1/zn_0.6.1_%s_%s.tar.gz", target.goos, target.goarch),
 			SHA256: hashes[target.key],
 		}
 	}

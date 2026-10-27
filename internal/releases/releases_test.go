@@ -41,12 +41,12 @@ func TestVerifiedReleaseStaging(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			body := archive(t, tc.member, "verified executable")
 			hash := sha256.Sum256(body)
-			asset := Asset{Name: "zn_0.5.0_linux_amd64.tar.gz", Size: int64(len(body)), Digest: "sha256:" + hex.EncodeToString(hash[:])}
+			asset := Asset{Name: "zn_0.5.0-maxa.1_linux_amd64.tar.gz", Size: int64(len(body)), Digest: "sha256:" + hex.EncodeToString(hash[:])}
 			var srv *httptest.Server
 			srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if strings.Contains(r.URL.Path, "/releases/") {
 					asset.URL = srv.URL + "/archive"
-					json.NewEncoder(w).Encode(Release{Tag: "v0.5.0", Assets: []Asset{asset}})
+					json.NewEncoder(w).Encode(Release{Tag: "v0.5.0-maxa.1", Assets: []Asset{asset}})
 					return
 				}
 				if tc.corrupt {
@@ -57,7 +57,7 @@ func TestVerifiedReleaseStaging(t *testing.T) {
 			}))
 			defer srv.Close()
 			client := &Client{HTTP: srv.Client(), APIBase: srv.URL}
-			rel, err := client.Lookup(context.Background(), CLI, "0.5.0")
+			rel, err := client.Lookup(context.Background(), CLI, "0.5.0-maxa.1")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -85,12 +85,12 @@ func TestVerifiedReleaseStaging(t *testing.T) {
 }
 
 func TestVersionSelection(t *testing.T) {
-	for _, invalid := range []string{"../main", "v1", "1.2.3/path", "latest?draft=true", "-1.2.3"} {
+	for _, invalid := range []string{"../main", "v1", "1.2.3-maxa.1/path", "latest?draft=true", "-1.2.3-maxa.1"} {
 		if _, err := NormalizeVersion(invalid); err == nil {
 			t.Errorf("accepted %q", invalid)
 		}
 	}
-	if !Newer("0.10.0", "0.9.9") || Newer("0.5.0", "v0.5.0") || Newer("0.4.1", "0.5.0") {
+	if !Newer("0.10.0-maxa.1", "0.9.9-maxa.1") || Newer("0.5.0-maxa.1", "v0.5.0-maxa.1") || Newer("0.4.1-maxa.1", "0.5.0-maxa.1") {
 		t.Fatal("version ordering is not semantic")
 	}
 }
@@ -111,7 +111,7 @@ func TestServerChecksumFileAndCancelledDownload(t *testing.T) {
 	}))
 	defer srv.Close()
 	client := &Client{HTTP: srv.Client(), APIBase: srv.URL}
-	rel := Release{Tag: "v2.56.0", Assets: []Asset{
+	rel := Release{Tag: "v2.56.0-maxa.1", Assets: []Asset{
 		{Name: "zennotes-server-linux-amd64", Size: int64(len(body)), URL: srv.URL + "/binary"},
 		{Name: "SHA256SUMS", URL: srv.URL + "/sums"},
 	}}
@@ -137,7 +137,7 @@ func TestServerChecksumFileAndCancelledDownload(t *testing.T) {
 
 func TestReleaseRejectsUnexpectedMetadataAndOversizeAssets(t *testing.T) {
 	client := NewClient()
-	r := Release{Tag: "v0.5.0", Assets: []Asset{{Name: "zn_0.5.0_linux_amd64.tar.gz", Size: maxBinaryBytes + 1}}}
+	r := Release{Tag: "v0.5.0-maxa.1", Assets: []Asset{{Name: "zn_0.5.0-maxa.1_linux_amd64.tar.gz", Size: maxBinaryBytes + 1}}}
 	if _, err := client.Stage(context.Background(), CLI, r, "linux", "amd64", t.TempDir()); err == nil {
 		t.Fatal("oversized asset accepted")
 	}
@@ -145,7 +145,7 @@ func TestReleaseRejectsUnexpectedMetadataAndOversizeAssets(t *testing.T) {
 		t.Fatal("unsafe release tag accepted")
 	}
 	address, err := client.assetURL(CLI, r, Asset{Name: "checksums.txt", URL: "https://untrusted.example/binary"})
-	if err != nil || address != "https://github.com/ZenNotes/tui/releases/download/v0.5.0/checksums.txt" {
+	if err != nil || address != "https://github.com/maxzhao/tui/releases/download/v0.5.0-maxa.1/checksums.txt" {
 		t.Fatalf("download not pinned to official release: %s %v", address, err)
 	}
 }
@@ -164,7 +164,7 @@ func TestInterruptedDownloadLeavesNoCandidate(t *testing.T) {
 	defer srv.Close()
 	go func() { <-started; cancel() }()
 	digest := sha256.Sum256([]byte("not the full content"))
-	r := Release{Tag: "v2.56.0", Assets: []Asset{{Name: "zennotes-server-linux-amd64", Size: 100, Digest: fmt.Sprintf("sha256:%x", digest), URL: srv.URL}}}
+	r := Release{Tag: "v2.56.0-maxa.1", Assets: []Asset{{Name: "zennotes-server-linux-amd64", Size: 100, Digest: fmt.Sprintf("sha256:%x", digest), URL: srv.URL}}}
 	dir := t.TempDir()
 	c := &Client{HTTP: srv.Client(), APIBase: srv.URL}
 	if _, err := c.Stage(ctx, Server, r, "linux", "amd64", dir); !errors.Is(err, context.Canceled) {
@@ -223,5 +223,26 @@ func TestWindowsArchiveExtractionRejectsSymlinksAndDuplicates(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestMaxaForkOnlyDiscovery(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/maxzhao/tui/releases" {
+			t.Errorf("non-fork lookup %s", r.URL.Path)
+		}
+		json.NewEncoder(w).Encode([]Release{{Tag: "v99.0.0"}, {Tag: "v0.11.0-maxa.1"}, {Tag: "v0.11.0-maxa.2", Prerelease: true}, {Tag: "v1.0.0-maxa.1", Draft: true}})
+	}))
+	defer server.Close()
+	client := &Client{APIBase: server.URL, HTTP: server.Client()}
+	release, err := client.Lookup(context.Background(), CLI, "latest")
+	if err != nil || release.Tag != "v0.11.0-maxa.2" {
+		t.Fatal(release, err)
+	}
+	if _, err := client.Lookup(context.Background(), CLI, "0.11.0"); err == nil {
+		t.Fatal("accepted upstream release pin")
+	}
+	if !Newer("0.11.0-maxa.10", "0.11.0-maxa.2") {
+		t.Fatal("fork suffix must compare numerically")
 	}
 }

@@ -13,7 +13,7 @@ func TestHealthVerifiesVersionVaultAndAuthentication(t *testing.T) {
 	m := fixtureManager(t)
 	for _, tc := range []struct{ name, version, root, noAuth string }{
 		{name: "healthy"},
-		{name: "wrong version", version: "2.55.0"},
+		{name: "wrong version", version: "2.55.0-maxa.1"},
 		{name: "wrong vault", root: t.TempDir()},
 		{name: "missing auth", noAuth: "enabled"},
 	} {
@@ -66,8 +66,8 @@ func TestUpdatingStoppedServerReturnsItToStopped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	i, err = m.Update(context.Background(), i.Name, "2.57.0")
-	if err != nil || s.active || i.Version != "2.57.0" {
+	i, err = m.Update(context.Background(), i.Name, "2.57.0-maxa.1")
+	if err != nil || s.active || i.Version != "2.57.0-maxa.1" {
 		t.Fatalf("stopped server update: %+v %v active=%t", i, err, s.active)
 	}
 }

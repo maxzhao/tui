@@ -1,43 +1,59 @@
-name: Release
-
+name: Prepare Maxa fork CLI release
 on:
-  push:
-    tags:
-      - "v*"
-
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: Reviewed full maxzhao/tui commit SHA
+        type: string
+        required: true
+      tag:
+        description: Fork CLI tag (vX.Y.Z-maxa.N)
+        type: string
+        required: true
 permissions:
-  contents: write
-
+  contents: read
 jobs:
   release:
+    if: github.repository == 'maxzhao/tui'
     runs-on: ubuntu-latest
+    environment: cli-release
+    permissions:
+      contents: write
+    env:
+      GOTOOLCHAIN: auto
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.source_commit }}
           fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
-          go-version: stable
-      - run: go test ./...
-      - uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: goreleaser
-          version: "~> v2"
-          args: release --clean
+          go-version-file: go.mod
+      - name: Validate fork release identity
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # ZenNotes desktop updates the CLI it manages by reading these two assets
-      # from releases/latest/download/, and only trusts a manifest signed by a
-      # key it ships with. A release without them is never offered to desktop.
-      - name: Build and sign the desktop update manifest
-        # Tags are annotated; ^{commit} names the commit itself whichever
-        # object the push event reports.
-        run: go run ./scripts/releasemanifest build -dist dist -tag "$GITHUB_REF_NAME" -commit "$(git rev-parse "$GITHUB_REF_NAME^{commit}")" -require-signature
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          printf '%s' "$SOURCE_COMMIT" | grep -Eq '^[0-9a-f]{40}$'
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+-maxa\.[0-9]+$'
+      - run: go vet ./... && go test ./...
+      - name: Build Linux archives and checksums
         env:
-          ZN_RELEASE_SIGNING_KEY: ${{ secrets.ZN_RELEASE_SIGNING_KEY }}
-      - name: Verify the manifest against the committed public key
-        run: go run ./scripts/releasemanifest verify -manifest dist/terminal-release.json -sig dist/terminal-release.json.sig -public-key-file packaging/release-signing/zn-release-1.pub
-      - name: Upload the manifest and signature
-        run: gh release upload "$GITHUB_REF_NAME" dist/terminal-release.json dist/terminal-release.json.sig --clobber
+          TAG: ${{ inputs.tag }}
+        run: |
+          mkdir release
+          version="${TAG#v}"
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -ldflags="-s -w -X github.com/ZenNotes/tui/internal/cli.Version=$version" -o release/zn ./cmd/zn
+            tar -C release -czf "release/zn_${version}_linux_${arch}.tar.gz" zn
+          done
+          rm release/zn
+          cd release && sha256sum zn_*.tar.gz > checksums.txt
+      - name: Prepare draft only
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: maxzhao/tui
+          TAG: ${{ inputs.tag }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: gh release create "$TAG" release/* --target "$SOURCE_COMMIT" --title "$TAG" --draft --notes "Maxa fork CLI. Publish only after checksum, candidate install and rollback review."

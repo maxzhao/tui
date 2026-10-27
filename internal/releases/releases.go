@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -18,8 +19,8 @@ import (
 type Product string
 
 const (
-	CLI    Product = "ZenNotes/tui"
-	Server Product = "ZenNotes/znserver"
+	CLI    Product = "maxzhao/tui"
+	Server Product = "maxzhao/znserver"
 	apiURL         = "https://api.github.com"
 )
 
@@ -51,23 +52,23 @@ func NewClient() *Client {
 	return &Client{APIBase: apiURL, HTTP: &http.Client{Timeout: 5 * time.Minute}}
 }
 
+var forkVersion = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-maxa\.(0|[1-9][0-9]*)$`)
+
 func NormalizeVersion(version string) (string, error) {
 	v := strings.TrimPrefix(strings.TrimSpace(version), "v")
-	parts := strings.Split(v, ".")
-	if len(parts) != 3 {
-		return "", fmt.Errorf("version must be a stable release such as 0.5.0")
+	if !forkVersion.MatchString(v) {
+		return "", fmt.Errorf("version must be a fork release such as 0.11.0-maxa.1")
 	}
-	for _, p := range parts {
-		if p == "" || len(p) > 1 && p[0] == '0' || strings.Trim(p, "0123456789") != "" {
-			return "", fmt.Errorf("invalid release version %q", version)
+	for _, p := range strings.FieldsFunc(v, func(r rune) bool { return r == '.' || r == '-' }) {
+		if p == "maxa" {
+			continue
 		}
 		if _, err := strconv.ParseUint(p, 10, 64); err != nil {
-			return "", fmt.Errorf("invalid release version %q", version)
+			return "", fmt.Errorf("invalid fork version %q", version)
 		}
 	}
 	return v, nil
 }
-
 func Newer(candidate, current string) bool {
 	next, err := NormalizeVersion(candidate)
 	if err != nil {
@@ -77,7 +78,8 @@ func Newer(candidate, current string) bool {
 	if err != nil {
 		return true
 	}
-	a, b := strings.Split(next, "."), strings.Split(old, ".")
+	a := strings.Split(strings.ReplaceAll(next, "-maxa.", "."), ".")
+	b := strings.Split(strings.ReplaceAll(old, "-maxa.", "."), ".")
 	for i := range a {
 		x, _ := strconv.ParseUint(a[i], 10, 64)
 		y, _ := strconv.ParseUint(b[i], 10, 64)
@@ -93,7 +95,7 @@ func (c *Client) Lookup(ctx context.Context, product Product, version string) (R
 	if product != CLI && product != Server {
 		return release, fmt.Errorf("unknown release product %q", product)
 	}
-	endpoint := "/latest"
+	endpoint := "?per_page=100"
 	if version != "" && version != "latest" {
 		v, err := NormalizeVersion(version)
 		if err != nil {
@@ -107,10 +109,20 @@ func (c *Client) Lookup(ctx context.Context, product Product, version string) (R
 		return release, err
 	}
 	defer body.Close()
-	if err := json.NewDecoder(body).Decode(&release); err != nil {
+	if version == "" || version == "latest" {
+		var all []Release
+		if err := json.NewDecoder(body).Decode(&all); err != nil {
+			return release, fmt.Errorf("read release metadata: %w", err)
+		}
+		for _, candidate := range all {
+			if _, err := NormalizeVersion(candidate.Tag); err == nil && !candidate.Draft && (release.Tag == "" || Newer(candidate.Tag, release.Tag)) {
+				release = candidate
+			}
+		}
+	} else if err := json.NewDecoder(body).Decode(&release); err != nil {
 		return release, fmt.Errorf("read release metadata: %w", err)
 	}
-	if _, err := NormalizeVersion(release.Tag); err != nil || release.Draft || release.Prerelease {
+	if _, err := NormalizeVersion(release.Tag); err != nil || release.Draft {
 		return release, fmt.Errorf("GitHub did not return a stable published release")
 	}
 	if version != "" && version != "latest" && version != release.Version() {

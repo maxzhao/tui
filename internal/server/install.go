@@ -36,6 +36,9 @@ func (m *Manager) lock(name string) (func(), error) {
 // Install downloads a verified binary and creates private runtime configuration.
 // Repeating the same installation preserves its version, credentials and vault.
 func (m *Manager) Install(ctx context.Context, opts Options) (Instance, error) {
+	if runtime.GOOS != "linux" {
+		return Instance{}, fmt.Errorf("Maxa server installation supports Linux and WSL only")
+	}
 	i := Instance{Name: opts.Name, Vault: opts.Vault, Bind: opts.Bind, BasePath: opts.BasePath}
 	old, err := m.Load(opts.Name)
 	if err != nil && !os.IsNotExist(err) {

@@ -50,14 +50,14 @@ changelog:
 
 release:
   github:
-    owner: ZenNotes
+    owner: maxzhao
     name: tui
   draft: false
-  prerelease: auto
+  prerelease: false
   footer: |
     ## Install
 
-    With Homebrew on macOS or Linux, run `brew install zennotes/tap/zn`, then `zn tui`.
+    Install only checksum-verified maxzhao/tui fork release assets.
 
     Download the archive for your platform, unpack it, and put `zn` on your PATH.
-    With Go installed, `go install github.com/ZenNotes/tui/cmd/zn@latest` builds the same thing.
+    The release includes checksums.txt for SHA-256 verification.

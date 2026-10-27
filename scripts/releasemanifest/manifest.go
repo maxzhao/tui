@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	repository     = "ZenNotes/tui"
+	repository     = "maxzhao/tui"
 	maxBinaryBytes = 256 << 20
 )
 
