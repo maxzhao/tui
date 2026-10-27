@@ -36,7 +36,7 @@ var helpSections = []helpSection{
 		{"list", "List notes, most recent first", "--folder <f>  --tag <t>  --limit <n>  --json"},
 		{"read <path>", "Print a note body to stdout", "--pretty  --style <name|json>  --meta  --json"},
 		{"create", "Create a new note. Body from --body or stdin", "--title <t>  --folder inbox|quick|archive  --subpath <p>  --tag <t>  --body \"...\"|-"},
-		{"write <path>", "Replace a note body. Destructive: prefer append", "--body \"...\"|-"},
+		{"write <path>", "Replace a note body. Destructive: prefer append", "--body \"...\"|-  --force"},
 		{"append <path>", "Append text to the end of a note", "--body \"...\"|-"},
 		{"prepend <path>", "Insert text at the top, after frontmatter", "--body \"...\"|-"},
 		{"rename <path>", "Rename a note (filename only)", "--to <new title>"},
@@ -51,7 +51,10 @@ var helpSections = []helpSection{
 	{"SEARCH", []helpRow{
 		{"search <query>", "Full-text search across live notes", "--limit <n>  --json"},
 		{"search-title <q>", "Match notes by title (substring)", "--json"},
-		{"backlinks <path>", "Notes linking to this one via [[wikilink]]", "--json"},
+		{"backlinks <path>", "Inbound references from the server index", "--json"},
+		{"links <path>", "Outgoing references from the server index", "--json"},
+		{"unresolved", "Missing and ambiguous references (server mode)", "--json"},
+		{"orphans", "Notes and canvases without inbound references (server mode)", "--json"},
 	}},
 	{"FOLDERS", []helpRow{
 		{"folder list", "List every subfolder in the vault", "--json"},
@@ -69,6 +72,7 @@ var helpSections = []helpSection{
 		{"task watch", "Print task status changes as they happen. A server that cannot push them is asked every --interval seconds (default 5)", "--interval <s>  --include-excluded  --json"},
 	}},
 	{"COMMENTS", []helpRow{
+		{"comment pending", "Unresolved threads awaiting the named author (server mode)", "--author <name>  --wait  --timeout <s>  --json"},
 		{"comment list <path>", "Comment threads on a note, with anchors and replies", "--all  --json"},
 		{"comment add <path> \"<body>\"", "Start a thread, optionally anchored to text from the note", "--anchor <text>  --author <name>  --json"},
 		{"comment reply <path> <id> \"<body>\"", "Answer in a thread", "--author <name>  --json"},

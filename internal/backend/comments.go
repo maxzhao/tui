@@ -126,7 +126,18 @@ func AddComment(ctx context.Context, b Backend, in AddCommentInput) (CommentThre
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	if _, err := b.WriteComments(ctx, in.Path, append(current, draft)); err != nil {
+	var writeErr error
+	if r, ok := b.(*Remote); ok {
+		_, writeErr = r.client.MutateComment(ctx, in.Path, func() string {
+			if draft.ParentID != "" {
+				return "reply"
+			}
+			return "add"
+		}(), "", draft, false)
+	} else {
+		_, writeErr = b.WriteComments(ctx, in.Path, append(current, draft))
+	}
+	if err := writeErr; err != nil {
 		return CommentThreadView{}, err
 	}
 	return threadByID(ctx, b, in.Path, draft.ID)
@@ -195,7 +206,13 @@ func ResolveComment(ctx context.Context, b Backend, rel, id string, resolved boo
 			current[i].UpdatedAt = now
 		}
 	}
-	if _, err := b.WriteComments(ctx, rel, current); err != nil {
+	var writeErr error
+	if r, ok := b.(*Remote); ok {
+		_, writeErr = r.client.MutateComment(ctx, rel, "resolve", root.ID, vault.NoteComment{}, resolved)
+	} else {
+		_, writeErr = b.WriteComments(ctx, rel, current)
+	}
+	if err := writeErr; err != nil {
 		return CommentThreadView{}, err
 	}
 	return threadByID(ctx, b, rel, root.ID)

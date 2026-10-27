@@ -105,12 +105,21 @@ func cmdFolderRename(ctx context.Context, b backend.Backend, args Args) error {
 	if oldRef.subpath == "" || newRef.subpath == "" {
 		return errors.New("Both old and new folder paths must include a subpath.")
 	}
-	next, err := b.RenameFolder(ctx, oldRef.folder, oldRef.subpath, newRef.subpath)
+	next := ""
+	changed := []string{}
+	if remote, ok := b.(*backend.Remote); ok {
+		result, e := remote.Client().RenameFolderDetailed(ctx, oldRef.folder, oldRef.subpath, newRef.subpath)
+		next = result.Subpath
+		changed = result.ChangedFiles
+		err = e
+	} else {
+		next, err = b.RenameFolder(ctx, oldRef.folder, oldRef.subpath, newRef.subpath)
+	}
 	if err != nil {
 		return err
 	}
 	if args.Bool("json") {
-		emitJSON(map[string]any{"ok": true, "folder": oldRef.folder, "subpath": next})
+		emitJSON(map[string]any{"ok": true, "folder": oldRef.folder, "subpath": next, "changedFiles": changed})
 		return nil
 	}
 	emitOK(fmt.Sprintf("Renamed to %s/%s", oldRef.folder, next))

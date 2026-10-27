@@ -197,6 +197,13 @@ func cmdCreate(ctx context.Context, b backend.Backend, args Args) error {
 }
 
 func emitWritten(meta vault.NoteMeta, args Args, verb string) {
+	if args.Bool("json") && (verb == "Renamed" || verb == "Moved") {
+		emitJSON(struct {
+			vault.NoteMeta
+			ChangedFiles []string `json:"changedFiles"`
+		}{meta, append([]string{}, meta.ChangedFiles...)})
+		return
+	}
 	if args.Bool("json") {
 		emitJSON(meta)
 		return
@@ -213,7 +220,16 @@ func cmdWrite(ctx context.Context, b backend.Backend, args Args) error {
 	if body == nil {
 		return errors.New("zn write requires --body, a positional body, or piped stdin.")
 	}
-	meta, err := b.WriteNote(ctx, rel, *body)
+	var meta vault.NoteMeta
+	if args.Bool("force") {
+		r, ok := b.(*backend.Remote)
+		if !ok {
+			return errors.New("--force requires --server")
+		}
+		meta, err = r.Client().WriteNoteVersion(ctx, rel, *body, "", true)
+	} else {
+		meta, err = b.WriteNote(ctx, rel, *body)
+	}
 	if err != nil {
 		return err
 	}

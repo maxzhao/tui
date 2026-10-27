@@ -354,7 +354,14 @@ func (c *Client) noteResult(ctx context.Context, path string, body any) (vault.N
 }
 
 func (c *Client) WriteNote(ctx context.Context, rel, body string) (vault.NoteMeta, error) {
-	return c.noteResult(ctx, "/api/notes/write", map[string]any{"path": rel, "body": body})
+	note, err := c.ReadNote(ctx, rel)
+	if err != nil && StatusOf(err) != 404 {
+		return vault.NoteMeta{}, err
+	}
+	if err == nil && note.Version == "" {
+		return vault.NoteMeta{}, errors.New("server does not support versioned writes; update the Maxa fork server")
+	}
+	return c.WriteNoteVersion(ctx, rel, body, note.Version, false)
 }
 
 func (c *Client) CreateNote(ctx context.Context, folder vault.NoteFolder, title, subpath string) (vault.NoteMeta, error) {
@@ -405,14 +412,19 @@ func (c *Client) CreateFolder(ctx context.Context, folder vault.NoteFolder, subp
 	return c.Post(ctx, "/api/folders/create", map[string]any{"folder": folder, "subpath": subpath}, nil)
 }
 
+type FolderRenameResult struct {
+	Subpath      string   `json:"subpath"`
+	ChangedFiles []string `json:"changedFiles"`
+}
+
 func (c *Client) RenameFolder(ctx context.Context, folder vault.NoteFolder, oldSubpath, newSubpath string) (string, error) {
-	var out struct {
-		Subpath string `json:"subpath"`
-	}
-	if err := c.Post(ctx, "/api/folders/rename", map[string]any{"folder": folder, "oldSubpath": oldSubpath, "newSubpath": newSubpath}, &out); err != nil {
-		return "", err
-	}
-	return out.Subpath, nil
+	out, err := c.RenameFolderDetailed(ctx, folder, oldSubpath, newSubpath)
+	return out.Subpath, err
+}
+func (c *Client) RenameFolderDetailed(ctx context.Context, folder vault.NoteFolder, oldSubpath, newSubpath string) (FolderRenameResult, error) {
+	out := FolderRenameResult{ChangedFiles: []string{}}
+	err := c.Post(ctx, "/api/folders/rename", map[string]any{"folder": folder, "oldSubpath": oldSubpath, "newSubpath": newSubpath}, &out)
+	return out, err
 }
 
 func (c *Client) DeleteFolder(ctx context.Context, folder vault.NoteFolder, subpath string) error {
@@ -450,4 +462,13 @@ func (c *Client) WriteTemplate(ctx context.Context, input vault.WriteTemplateInp
 
 func (c *Client) DeleteTemplate(ctx context.Context, sourcePath string) error {
 	return c.Post(ctx, "/api/templates/delete", map[string]any{"sourcePath": sourcePath}, nil)
+}
+
+func (c *Client) WriteNoteVersion(ctx context.Context, rel, body, base string, force bool) (vault.NoteMeta, error) {
+	return c.noteResult(ctx, "/api/notes/write", map[string]any{"path": rel, "body": body, "baseVersion": base, "force": force})
+}
+func (c *Client) MutateComment(ctx context.Context, rel, operation, id string, comment vault.NoteComment, resolved bool) ([]vault.NoteComment, error) {
+	var out []vault.NoteComment
+	err := c.Post(ctx, "/api/comments/mutate", map[string]any{"path": rel, "operation": operation, "id": id, "comment": comment, "resolved": resolved}, &out)
+	return out, err
 }

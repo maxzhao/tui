@@ -55,7 +55,7 @@ func cmdSearchTitle(ctx context.Context, b backend.Backend, args Args) error {
 	}
 	matches := []vault.NoteMeta{}
 	for _, n := range all {
-		if n.Folder != vault.FolderTrash && strings.Contains(strings.ToLower(n.Title), needle) {
+		if n.Folder != vault.FolderTrash && strings.Contains(strings.ToLower(n.Title+"\n"+n.DisplayTitle+"\n"+strings.Join(n.Aliases, "\n")), needle) {
 			matches = append(matches, n)
 		}
 	}
@@ -78,6 +78,9 @@ func cmdSearchTitle(ctx context.Context, b backend.Backend, args Args) error {
 }
 
 func cmdBacklinks(ctx context.Context, b backend.Backend, args Args) error {
+	if _, ok := b.(*backend.Remote); ok {
+		return cmdGraph(ctx, b, args, "backlinks")
+	}
 	rel := args.Str("path")
 	if rel == "" {
 		rel = args.Positional(0)

@@ -53,6 +53,11 @@ const (
 // NoteMeta is what `zn list --json` prints for a note. Field names and order
 // match the desktop CLI so scripts reading its JSON keep working.
 type NoteMeta struct {
+	DisplayTitle string   `json:"displayTitle"`
+	Aliases      []string `json:"aliases"`
+	Type         string   `json:"type,omitempty"`
+	Version      string   `json:"version,omitempty"`
+	ChangedFiles []string `json:"changedFiles,omitempty"`
 	// Path is vault-relative and always POSIX-separated.
 	Path string `json:"path"`
 	// Link is the `zennotes://open?path=…` URL that focuses the app on the

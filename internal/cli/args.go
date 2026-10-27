@@ -43,6 +43,7 @@ func startsAFlag(token string) bool {
 // VALUELESS_FLAGS) holds the same list minus the switches only this CLI has
 // (no-default, no-edit, path, pretty). Keep the two in sync.
 var valuelessFlags = map[string]bool{
+	"force": true, "wait": true,
 	"all":              true,
 	"include-excluded": true,
 	"json":             true,

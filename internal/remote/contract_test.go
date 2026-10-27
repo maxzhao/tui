@@ -70,7 +70,7 @@ func checkHTTPClientContract(t *testing.T, base string, f httpContract) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	anonymous := NewClient(base, "")
-	caps, err := anonymous.Capabilities(ctx)
+	caps, err := NewClient(base, contractToken).Capabilities(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestSharedHTTPClientContract(t *testing.T) {
 				if body == fixture.Note.UpdatedBody {
 					embeds = fixture.Note.UpdatedAssetEmbeds
 				}
-				return map[string]any{"path": fixture.Note.Path, "title": "Contract", "folder": "inbox", "siblingOrder": 0, "createdAt": 1, "updatedAt": 2, "size": len(body), "tags": []string{}, "wikilinks": []string{}, "assetEmbeds": embeds, "hasAttachments": true, "excerpt": "Contract"}
+				return map[string]any{"path": fixture.Note.Path, "title": "Contract", "displayTitle": "Contract", "aliases": []string{}, "version": fmt.Sprintf("%x", sha256.Sum256([]byte(body))), "folder": "inbox", "siblingOrder": 0, "createdAt": 1, "updatedAt": 2, "size": len(body), "tags": []string{}, "wikilinks": []string{}, "assetEmbeds": embeds, "hasAttachments": true, "excerpt": "Contract"}
 			}
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
@@ -260,7 +260,7 @@ func TestIndependentServerHTTPContract(t *testing.T) {
 			deadline := time.Now().Add(10 * time.Second)
 			for {
 				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-				_, err := NewClient(base, "").Capabilities(ctx)
+				_, err := NewClient(base, contractToken).Capabilities(ctx)
 				cancel()
 				if err == nil {
 					break

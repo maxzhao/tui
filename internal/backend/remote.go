@@ -109,20 +109,31 @@ func (r *Remote) CreateNote(ctx context.Context, folder vault.NoteFolder, title,
 	return r.client.WriteNote(ctx, meta.Path, *body)
 }
 
-func (r *Remote) AppendToNote(ctx context.Context, rel, text string) (vault.NoteMeta, error) {
-	note, err := r.client.ReadNote(ctx, rel)
-	if err != nil {
-		return vault.NoteMeta{}, err
+func (r *Remote) updateLatest(ctx context.Context, rel string, transform func(vault.NoteContent) (string, error)) (vault.NoteMeta, error) {
+	for attempt := 0; attempt < 5; attempt++ {
+		note, err := r.client.ReadNote(ctx, rel)
+		if err != nil {
+			return vault.NoteMeta{}, err
+		}
+		if note.Version == "" {
+			return vault.NoteMeta{}, errors.New("server does not support versioned writes")
+		}
+		body, err := transform(note)
+		if err != nil {
+			return vault.NoteMeta{}, err
+		}
+		meta, err := r.client.WriteNoteVersion(ctx, rel, body, note.Version, false)
+		if remote.StatusOf(err) != 409 {
+			return meta, err
+		}
 	}
-	return r.client.WriteNote(ctx, rel, vault.AppendToBody(note.Body, text))
+	return vault.NoteMeta{}, errors.New("persistent version conflict; no concurrent content was overwritten")
 }
-
+func (r *Remote) AppendToNote(ctx context.Context, rel, text string) (vault.NoteMeta, error) {
+	return r.updateLatest(ctx, rel, func(n vault.NoteContent) (string, error) { return vault.AppendToBody(n.Body, text), nil })
+}
 func (r *Remote) PrependToNote(ctx context.Context, rel, text string) (vault.NoteMeta, error) {
-	note, err := r.client.ReadNote(ctx, rel)
-	if err != nil {
-		return vault.NoteMeta{}, err
-	}
-	return r.client.WriteNote(ctx, rel, vault.PrependToBody(note.Body, text))
+	return r.updateLatest(ctx, rel, func(n vault.NoteContent) (string, error) { return vault.PrependToBody(n.Body, text), nil })
 }
 
 func (r *Remote) RenameNote(ctx context.Context, rel, nextTitle string) (vault.NoteMeta, error) {
@@ -162,7 +173,7 @@ func (r *Remote) InsertAtLine(ctx context.Context, rel string, lineNumber int, t
 	if err != nil {
 		return vault.NoteMeta{}, err
 	}
-	return r.client.WriteNote(ctx, rel, vault.InsertAtLineInBody(note.Body, lineNumber, text))
+	return r.client.WriteNoteVersion(ctx, rel, vault.InsertAtLineInBody(note.Body, lineNumber, text), note.Version, false)
 }
 
 // ReplaceInNote: no match means no write, so the receipt comes from the
@@ -218,11 +229,25 @@ func (r *Remote) SearchText(ctx context.Context, query string, limit int) ([]vau
 }
 
 func (r *Remote) Backlinks(ctx context.Context, rel string) ([]vault.NoteMeta, error) {
+	refs, err := r.client.References(ctx, "backlinks", rel)
+	if err != nil {
+		return nil, err
+	}
 	notes, err := r.client.ListNotes(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return vault.BacklinksIn(notes, vault.NormalizeRelPath(rel)), nil
+	sources := map[string]bool{}
+	for _, ref := range refs {
+		sources[ref.Source] = true
+	}
+	out := []vault.NoteMeta{}
+	for _, n := range notes {
+		if sources[n.Path] {
+			out = append(out, n)
+		}
+	}
+	return out, nil
 }
 
 // The server parses with its own grammar; the dialect only shapes the
@@ -242,35 +267,35 @@ func (r *Remote) ToggleTask(ctx context.Context, taskID string, dialect vault.Ta
 	if err != nil {
 		return nil, err
 	}
-	note, err := r.client.ReadNote(ctx, rel)
-	if err != nil {
-		return nil, err
-	}
-	var next string
-	found := false
-	if indexStr == "task" {
-		current, err := r.client.ScanTasksForPath(ctx, rel, true)
-		if err != nil {
-			return nil, err
-		}
-		for _, t := range current {
-			if t.ID == taskID {
-				next = vault.ToggleFileTaskInBody(note.Body, t.Checked, time.Now())
-				found = true
-				break
+	_, err = r.updateLatest(ctx, rel, func(note vault.NoteContent) (string, error) {
+		var next string
+		found := false
+		if indexStr == "task" {
+			current, err := r.client.ScanTasksForPath(ctx, rel, true)
+			if err != nil {
+				return "", err
 			}
+			for _, t := range current {
+				if t.ID == taskID {
+					next = vault.ToggleFileTaskInBody(note.Body, t.Checked, time.Now())
+					found = true
+					break
+				}
+			}
+		} else {
+			index, err := vault.ParseTaskIndex(taskID, indexStr)
+			if err != nil {
+				return "", err
+			}
+			next, found = vault.ToggleTaskInBody(note.Body, index, dialect)
 		}
-	} else {
-		index, err := vault.ParseTaskIndex(taskID, indexStr)
-		if err != nil {
-			return nil, err
+		if !found {
+			return "", fmt.Errorf("task %s not found", taskID)
 		}
-		next, found = vault.ToggleTaskInBody(note.Body, index, dialect)
-	}
-	if !found {
-		return nil, nil
-	}
-	if _, err := r.client.WriteNote(ctx, rel, next); err != nil {
+		return next, nil
+
+	})
+	if err != nil {
 		return nil, err
 	}
 	after, err := r.client.ScanTasksForPath(ctx, rel, true)
